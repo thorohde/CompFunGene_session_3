@@ -1,0 +1,572 @@
+---
+title: "Computational Functional Genomics and Genome Medicine - session 1"
+author: "Jun.-Prof. Dr. Maximilian Billmann"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+toc: true
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Before you start
+
+*Disclaimer: this script was carefully prepared to help understand some of the basics of bioinformatics relevant for CRISPR screens, but may contain errors.*
+
+This exercise uses the programming language **R** that is relatively easy to start with for non-computer scientists and is the main language today for statistics in the life sciences. R is accessed in a code editor called **RStudio**.
+
+See https://www.r-project.org/ for more information about **R**, and https://posit.co/download/rstudio-desktop/ for more information on **RStudio** as well as instructions for installing R and RStudio. *It is advised to install these before the course.*
+
+
+
+# Install and load required packages
+
+R packages are extensions of the R programming language, which contain documented and structured code and data (other programming languages refer to similar extensions as libraries). Many exercises require you to install specific packages. You can do so via the Comprehensive R Archive Network (**CRAN**). CRAN can be directly selected from within RStudio. Many software package used for genomics/biology questions are deposited on another software repository called **Bioconductor** (see https://www.bioconductor.org/).
+
+Here, we install an essential package for this course from Bioconductor. Please install from the console using the following code:
+
+```{r, eval=FALSE}
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("limma")
+```
+
+Load package.
+
+```{r, warning=FALSE, message=FALSE}
+library(limma)
+```
+
+
+# Introduction
+
+Welcome to the course! In the following you will learn some basics in bioinformatics as the foundation for using CRISPR screens to understand genetic dependencies of different cellular functions.
+
+
+## Basic data structures in R
+
+R works well on vectors and matrices of data. This is not a comprehensive resource for programming in R but will repeat the concept of vectors, matrices, arrays and some basic operations.
+
+### Vectors
+
+Define vectors a and b.
+
+```{r}
+a <- c(1,3,4,6,7) # I am a vector
+b <- c(2,2,4,5,6) # me too
+```
+
+Print vector a.
+
+```{r}
+a
+```
+
+Plot vectors a and b against each other.
+
+```{r, fig.width=6, fig.height=4}
+plot(x = a, y = b)
+```
+
+
+### matrices and arrays
+
+In R, matrices and arrays present a simple format for two or multidimensional data. Let's start with a two-dimensional array. We'll not fill it with actual numbers at first.
+
+```{r}
+ab <- array(data = NA, dim = c(length(a), 2),
+            dimnames = list(1:length(a), c("a","b")))
+```
+
+You can print this array to see its format and content. Note: this is not recommended for large arrays as you will not be able to see anything useful in the console (where you print it).
+
+```{r}
+ab
+```
+
+For large arrays, check dimensions first using the following command.
+
+```{r}
+dim(ab)
+```
+
+Now fill the array with data. You can use your vectors a and b for that, but other options exist too. We have called the first column of the array a, so you can index your array different ways to define where you want to transfer the vector a to. For example you can say:
+
+```{r}
+ab[,"a"] <- a # comment: ab[,1] <- a #works too!
+
+ab #print
+```
+
+Now add vector b too.
+
+```{r}
+ab[,"b"] <- b # comment: ab[,2] <- b #works too!
+
+ab #print
+```
+
+Finally, you can plot the data in the array.
+
+```{r, fig.width=6, fig.height=4}
+plot(x = ab[,"a"], y = ab[,"b"])
+```
+
+## Some basic operations
+
+In R, addition, subtraction, division, multiplication can be done on single values, vectors or arrays as shown in brief below. Let's start with a few examples.
+
+### Addition and subtraction
+
+```{r}
+3 + 4 #execute in console
+```
+
+```{r}
+3 - 4 #execute in console
+```
+
+You can do this for your vectors. Here, the first element of a is added to the first of the first element of b, the second of a to the second of b, etc.
+
+```{r}
+a + b #execute in console
+```
+
+
+### Division and multiplication
+
+```{r}
+3 * 4 #execute in console
+```
+
+```{r}
+6 / 3 #execute in console
+```
+
+```{r}
+a * b #execute in console
+```
+
+```{r}
+a / b #execute in console
+```
+
+```{r}
+2 * ab #execute in console
+```
+
+### Logarithmic (log) transformation
+
+Most functional genomics data will be log-transformed during analysis. Here, the logarithm to the basis of 2 is frequently used.
+
+```{r, fig.width=6, fig.height=5}
+log2_a <- log2(a)
+
+plot(x = a, y = log2_a)
+abline(a = 0, b = 1, lty = 2) #add x = y line in plot
+```
+
+### Mathematical functions
+
+Application on single vectors.
+
+```{r}
+mean(a)
+```
+
+```{r}
+median(a)
+```
+
+```{r}
+sd(a) #standard deviation
+```
+
+Application on arrays.
+
+```{r}
+mean(ab)
+```
+
+So-called **apply** functions allow for executing mathematical functions on specified dimensions of an array. Please familiarize yourself with the syntax of this function.
+ 
+```{r}
+apply(ab, 2, mean, na.rm = T)
+```
+
+
+
+# Import CRISPR screening data
+
+## Brief description of the data
+
+Import raw readcount files for all gRNAs of genome-wide CRISPR screens published in Aregger et al., Nature Metabolism 2020 (see https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7566881/ for article). The screen called **WT_007_min** is a control screen and all others are screens in cell lines that carry a loss-of-function mutation in the FASN, LDLR, SREBF1 or SREBF2 gene. So the purpose is to find differential fitness effects (log2 foldchange) between the control and KO screens. In other words, we try to find genetic interactions with FASN, LDLR, SREBF1 and SREBF2.
+
+The rows of both data sets are labeled with the gene symbol of the gene intended to be targeted by the respective gRNA. Specific gRNA IDs are not provided.
+
+## Import raw readcounts
+
+### Starting gRNA data
+
+Import the starting gRNA abundance data.
+
+```{r}
+load(file = "input_data/small_readcounts_t0.rda")
+```
+
+This object contains raw and normalized readcounts. To learn about read depth normalization focus on the raw data. But before you start, try to figure out what data is stored in the different dimensions of this object. Start by checking the dimensions.
+
+```{r}
+dim(small_readcounts_t0)
+```
+
+### Endpoint gRNA data
+
+Import the screening endpoint gRNA abundance data. Reminder: gRNAs that target genes essential for cell fitness will have dropped out of the population.
+
+
+```{r}
+load(file = "input_data/small_readcounts_t18.rda")
+```
+
+Again, try to figure out what data is stored in the different dimensions of this object. 
+
+```{r}
+dim(small_readcounts_t18)
+```
+
+
+Q1.1: do both data objects contain the same gRNA IDs/gene symbols?
+Q1.2: are gRNA IDs/gene symbols in the same order in both objects?
+Q1.3: the gRNAs are labeled by the gene symbol they target. Can you count how many genes are targeted in total?
+
+
+### Explore imported raw data
+
+You learning about apply functions above. You can use those to learn some basic stats about the data for every sample / CRISPR screen.
+
+```{r}
+apply(small_readcounts_t0[,,"raw"], 2, mean, na.rm = T)
+```
+
+```{r}
+apply(small_readcounts_t18[,,"raw"], 2, mean, na.rm = T)
+```
+
+Overall, there are `r dim(small_readcounts_t18)[1]` gRNAs in the data. You can subset the endpoint data to show raw readcounts for the first 6 gRNAs. To allow confirming your results easily.
+
+Can you already infer a gene drop out from this view?
+
+```{r}
+small_readcounts_t18[1:6,1:5,"raw"]
+```
+
+Try the same this time with an essential gene. What is missing to judge gene essentiality?
+
+```{r}
+small_readcounts_t18[grep("^LDLR", row.names(small_readcounts_t18)),1:5,"raw"]
+```
+
+
+### Visualiza raw readcount distribution
+
+Plot a histgram of the raw readcounts of the `r dim(small_readcounts_t0)[1]` gRNAs in the **starting** cell population of the control screen.
+
+```{r, fig.width=8, fig.height=3.2}
+hist(small_readcounts_t0[,"WT_007_min","raw"], breaks = 20, xlab = "Raw readcounts",
+     main = "Start of CRISPR screen")
+```
+
+Plot a histgram of the raw readcounts of the `r dim(small_readcounts_t0)[1]` gRNAs in the **endpoint** cell population of the control screen.
+
+```{r, fig.width=8, fig.height=3.2}
+hist(small_readcounts_t18[,"WT_007_min","raw"], breaks = 20, xlab = "Raw readcounts",
+     main = "End of CRISPR screen")
+```
+
+
+Compare the raw readcounts of the `r dim(small_readcounts_t0)[1]` gRNAs between the **starting** and **endpoint** cell population of the control screen.
+
+```{r, fig.width=10, fig.height=8}
+plot(small_readcounts_t0[,"WT_007_min","raw"], small_readcounts_t18[,"WT_007_min","raw"],
+     xlab = "Raw readcounts start", ylab = "Raw readcounts end")
+
+abline(a = 0, b = 1, lty = 2, col = "grey") #add x = y line in plot
+```
+
+
+# Normalize raw readcount data
+
+
+## Normalization function
+
+Implement an R function to normalize for sequencing depth of each sample/screen (control or KO at start or endpoint) and log2 transform the data. More details of this function will be discussed in the course.
+
+```{r, normData_func}
+normalizeReads <- function(data, cf1 = 1e6, cf2 = 1) {
+  log2((data / sum(data, na.rm = TRUE)) * cf1 + cf2)
+}
+```
+
+## Normalize
+
+Deploy function to normalize start and endpoint samples in control and KO screens. You can write a simple FOR loop to do so.
+
+```{r, normData}
+for(i in 1:dim(small_readcounts_t0)[2]) {
+  small_readcounts_t0[,i,"norm"] <- normalizeReads(data = small_readcounts_t0[,i,"raw"])
+}
+
+for(i in 1:dim(small_readcounts_t18)[2]) {
+  small_readcounts_t18[,i,"norm"] <- normalizeReads(data = small_readcounts_t18[,i,"raw"])
+}
+```
+
+
+### Visualiza raw readcount distribution
+
+How did the data change.
+
+```{r, fig.width=10, fig.height=8}
+plot(small_readcounts_t0[,"WT_007_min","raw"], small_readcounts_t0[,"WT_007_min","norm"],
+     xlab = "Raw readcounts", ylab = "Normalized readcounts")
+```
+
+
+Plot a histgram of the normalized readcounts of the `r dim(small_readcounts_t0)[1]` gRNAs in the **starting** cell population of the control screen.
+
+```{r, fig.width=8, fig.height=3.2}
+hist(small_readcounts_t0[,"WT_007_min","norm"], breaks = 20, xlab = "Normalized readcounts", main = "Start of CRISPR screen")
+```
+
+Plot a histgram of the normalized readcounts of the `r dim(small_readcounts_t0)[1]` gRNAs in the **endpoint** cell population of the control screen.
+
+```{r, fig.width=8, fig.height=3.2}
+hist(small_readcounts_t18[,"WT_007_min","norm"], breaks = 20, xlab = "Normalized readcounts", main = "End of CRISPR screen")
+```
+
+
+Compare the normalized readcounts of the `r dim(small_readcounts_t0)[1]` gRNAs between the **starting** and **endpoint** cell population of the control screen. Which gRNA do you guess target essential genes?
+
+```{r, fig.width=10, fig.height=8}
+plot(small_readcounts_t0[,"WT_007_min","norm"], small_readcounts_t18[,"WT_007_min","norm"],
+     xlab = "Normalized readcounts start", ylab = "Normalized readcounts end")
+
+abline(a = 0, b = 1, lty = 2, col = "grey") #add x = y line in plot
+```
+
+
+# Fitness scores
+
+Remember, gRNAs with a lower representation / abundance at the end of the experiment compared to the start of the experiment target genes required for cell fitness. Here, cell fitness is defined as a composite cell phenotype that covers all more specific cellular phenotypes that eventually lead to a reduced cell division, growth, increased cell death, and more.
+
+Therefore, to identify genes that affect cell fitness (the composite phenotype), we need to compute each gRNA's ratio (foldchange, fc) of endpoint vs. starting abundance. Since the readcount data is already log2-transformed, the ratio is build by dividing end by start. The log2 foldchange is referred to as **lfc**. The computation can simply be done on the entire matrices.
+
+## Compute lfc
+
+```{r}
+lfc <- small_readcounts_t18[,,"norm"] - small_readcounts_t0[,,"norm"]
+```
+
+## Show lfc
+
+Plot a histgram of the lfc  of the `r dim(lfc)[1]` gRNAs in the **control screen** cell population of the control screen.
+
+```{r, fig.width=8, fig.height=3.2}
+hist(lfc[,"WT_007_min"], breaks = 20, xlab = "gRNA lfc", main = "control screen")
+```
+
+Plot a histgram of the lfc  of the `r dim(lfc)[1]` gRNAs in the **FASN KO screen** cell population of the control screen.
+
+```{r, fig.width=8, fig.height=3.2}
+hist(lfc[,"FASN_004_min"], breaks = 20, xlab = "gRNA lfc", main = "FASN KO screen")
+```
+
+Compare the normalized readcounts of the `r dim(lfc)[1]` gRNAs between the **starting** and **endpoint** cell population of the control screen. Scale dots by the absolute lfc. Is this what you expect?
+
+```{r, fig.width=10, fig.height=8}
+plot(small_readcounts_t0[,"WT_007_min","norm"], small_readcounts_t18[,"WT_007_min","norm"],
+     xlab = "Normalized readcounts start", ylab = "Normalized readcounts end", cex = abs(lfc[,"WT_007_min"]))
+
+abline(a = 0, b = 1, lty = 2, col = "grey") #add x = y line in plot
+```
+
+
+# Genetic interactions
+
+## gRNA-level genetic interactions
+
+Differential fitness effects can identify genes required for a specific cell type, differentiation state, a vulnerability towards a specific mutation or other contexts. The differential fitness effect in the FASN KO background can be referred to as a genetic interaction (GI) with FASN. In simple terms, this can be computed as the differential lfc (dLfc) between FASN KO lfc and control screen lfc.
+
+The following computation is performed for one FASN screen only. Feel free to expand the code to score GIs for all 6 CRISPR screens once you are done.
+
+```{r}
+dLFC <- lfc[,"FASN_004_min"] - lfc[,"WT_007_min"]
+```
+
+In practice, there are often non-linear effects that describe the relation between a query (e.g. FASN KO) and a control screen. For simplicity we'll ignore this more complicated modeling part and assume a simple global linear relation.
+
+Let's compare the fitness effects (lfc) for gRNA in the control and the FASN KO screen. We'll also scale the dots by the absolute dLFC to visualize potential GIs.
+
+```{r, fig.width=10, fig.height=8}
+plot(lfc[,"WT_007_min"], lfc[,"FASN_004_min"],
+     xlab = "lfc control screen", ylab = "lfc FASN KO screen", cex = abs(dLFC))
+
+abline(a = 0, b = 1, lty = 2, col = "orange") #add x = y line in plot
+abline(h = 0, v = 0, lty = 2, col = "grey")
+```
+
+## Gene-level genetic interactions
+
+So far, everything has been computed at the gRNA-level. However, we are interested in gene phenotypes. Since on average about four gRNAs target each of the approximately 18,000 protein encoding genes, we now summarize the effects for all gRNA targeting a given gene.
+
+### Get gRNAs per gene
+
+Load pre-computed table for gRNAs for each gene in the library. This table also includes indices showing at which position in e.g. the lfc object each gRNA is found.
+
+```{r, countGuidesGene}
+load(file = "input_data/small_guideCount.rda")
+```
+
+View header
+
+```{r, view_gRNA_gene}
+head(small_guideCount)
+```
+
+
+## Compute gene-level scores
+
+To estimate gene-level genetic interaction scores, only genes that are targeted with at least 2 guides are considered.
+
+```{r, geneticInteractions_dfPrep, echo=T}
+geneNames <- unique(row.names(small_guideCount))
+
+geneStats <- array(NA, dim = c(length(geneNames), 7, 3),
+                 dimnames = list(geneNames, c(colnames(small_guideCount)[2:5],"mean","pval","fdr"),
+                                 c("lfc_ctrl","lfc_ko","gi")))
+```
+
+
+Re-format gRNA-level scores into a gene-level array.
+
+```{r}
+for(i in 1:length(geneNames)) {
+  goiInd <- which(row.names(lfc) == geneNames[i])
+  
+  a <- small_guideCount[geneNames[i],"no. guides"]
+  
+  geneStats[i,1:a,"lfc_ctrl"] <- lfc[goiInd,"WT_007_min"]
+  geneStats[i,1:a,"lfc_ko"] <- lfc[goiInd,"FASN_004_min"]
+  geneStats[i,1:a,"gi"] <- dLFC[goiInd]
+}
+```
+
+Show stats for the new genetic interaction we found.
+
+```{r}
+geneStats["C12orf49",,]
+```
+
+### Significance of gene-level scores
+
+This array will now be used to compute gene-level dLFC values (=GI) as well as their significance: the p-value and after multiple hypothesis correction, the false discovery rate (FDR). The p-value tests if the four gRNA values per gene are different from 0. This is done with the `limma` R package (https://bioconductor.org/packages/release/bioc/html/limma.html). The p-value is computed using a **moderated t-test**, which increases statistical power.
+
+```{r}
+for(i in 1:dim(geneStats)[3]) {
+  fit <- lmFit(geneStats[,1:4,i])
+  efit <- eBayes(fit)
+  
+  geneStats[,"mean",i] <- fit$Amean # per-gene mean across gRNAs == fitness effect
+  geneStats[,"pval",i] <- efit$p.value # per-gene p-value
+  geneStats[,"fdr",i] <- p.adjust(efit$p.value, method="BH") # per-gene FDR
+}
+```
+
+Show stats for the new genetic interaction was identified and characterized as a new component of lipid biosynthesis in our paper.
+
+```{r}
+geneStats["C12orf49",,]
+```
+
+Compare corrected and uncorrected p-values.
+
+```{r, fig.width=7, fig.height=5}
+plot(geneStats[,"pval","gi"], geneStats[,"fdr","gi"])
+```
+
+How are p-values distributed? Does this data suffer from p-value inflation?
+
+```{r, fig.width=8, fig.height=5}
+hist(geneStats[,"pval","gi"], breaks = 20)
+```
+
+
+### Further statistical considerations
+
+Here, we corrected for multiple hypothesis using the method by Benjamini and Hochberg (BH) defined by the argument `method` in the function `p.adjust`. Try to use other methods. What is the difference?
+
+
+
+How does the p-value compare to a p-value computed by a simple t-test?
+
+```{r}
+t.test(geneStats["C12orf49",1:4,"gi"]) #remember, the 4 gRNAs targeting C12orf49 are tested against 0
+```
+
+You can try and implement this t-test in the FOR loop above replacing the moderated t-test. How does this change the results?
+
+
+## Show genetic interactions
+
+Show as the differential fitness effect between the control and FASN KO screen. Dots are scaled by the absolute GI score. GI are identified at an absolute GI score larger 0.3 and a FDR larger 10%.
+
+```{r, fig.width=8, fig.height=7}
+plot(geneStats[,"mean","lfc_ctrl"], geneStats[,"mean","lfc_ko"], cex = abs(geneStats[,"mean","gi"]) + 0.7,
+     xlab = "Fitness ctrl", ylab = "Fitness FASN KO",
+     pch = 21, bg = ifelse(abs(geneStats[,"mean","gi"]) > 0.3 & geneStats[,"fdr","gi"] < 0.1,
+                           "cornflowerblue","white"))
+
+abline(a = 0, b = 1, lty = 2, col = "orange") #add x = y line in plot
+abline(h = 0, v = 0, lty = 2, col = "grey")
+```
+
+Alternatively, GI are shown in a volcano plot. Here, the GI score is compared against -log10 p-values to emphasize the smallest p-values.
+
+Again, dots are scaled by the absolute GI score. GI are identified at an absolute GI score larger 0.3 and a FDR larger 10%.
+
+```{r, fig.width=8, fig.height=6}
+plot(geneStats[,"mean","gi"], -log10(geneStats[,"pval","gi"]), cex = abs(geneStats[,"mean","gi"]) + 0.7,
+     xlab = "GI", ylab = "-log10 p-value",
+     pch = 21, bg = ifelse(abs(geneStats[,"mean","gi"]) > 0.3 & geneStats[,"fdr","gi"] < 0.1,
+                           "cornflowerblue","white"))
+```
+
+Also plot GI scores against multiple hypothesis-corrected p-values.
+
+```{r, fig.width=8, fig.height=6}
+plot(geneStats[,"mean","gi"], -log10(geneStats[,"fdr","gi"]), cex = abs(geneStats[,"mean","gi"]) + 0.7,
+     xlab = "GI", ylab = "-log10 fdr",
+     pch = 21, bg = ifelse(abs(geneStats[,"mean","gi"]) > 0.3 & geneStats[,"fdr","gi"] < 0.1,
+                           "cornflowerblue","white"))
+
+abline(h = -log10(0.1), lty = 3, col = "grey")
+```
+
+
+Q1.4: which gene causes the strongest fitness defect when knocked out?
+Q1.5: which gene has the strongest negative genetic interaction with FASN?
+
+
+END code.
+
+
+
