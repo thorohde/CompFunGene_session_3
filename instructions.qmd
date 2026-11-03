@@ -7,7 +7,7 @@ format: html
 # 1. Why do we want to use a coding agent?
 
 - The difference between using AI in a browser chat and as a coding agent is the context and information it has access to. 
-- If the model LLM is connected to your coding environment, it gains access to your local files, the project structure, and the code you have already written. 
+- If the LLM is connected to your coding environment, it gains access to your local files, the project structure, and the code you have already written. 
 - This allows it to provide much more relevant and context-aware suggestions. It can access data, functions, and variables defined in your project, which allows it to generate code that is more likely to work correctly and efficiently. 
 - It can also help you navigate your codebase, find bugs, and suggest improvements based on the existing code.
 
@@ -18,7 +18,7 @@ Once you have connected to a coding agent, you can use it in any Positron sessio
 
 ## Steps required to connect Positron to Github Copilot:
 
-- 2.1 Open the Command Palette with `Ctrl+Shift+P` (Windows/Linux) or `Cmd+Shift+P` (macOS). Enter `Posit Assistant: Configure AI Providers`, open `Providers.json` and add:
+- 2.1 Open the Command Palette with `Ctrl+Shift+P` (Windows/Linux) or `Cmd+Shift+P` (macOS). Enter `Preferences: Open AI Provider Settings (JSON)` and add:
 
 ```{r}
 
@@ -39,14 +39,14 @@ Your `Providers.json` file should now look something like this. The openai entry
     "openai": { # This is the OpenAI provider, which you can ignore for now
       "baseUrl": "https://api.openai.com/v1"
     }, 
-    "copilot": { # This is the Github Copilot provider, which includes models like Copilot and Copilot Chat.
-      "enabled": true
-    }
+    "copilot": { ### important
+      "enabled": true ### important
+    } ### important
   }
 }
 ```
 
-- 2.2 Now open Positron's Command Palette (`Ctrl+Shift+P`) and select `Preferences: Open User Settings (JSON)`, click on `open Settings (JSON)`. Add this setting: `"chat.mcp.autostart": "never"`
+- 2.2 Now open Positron's Command Palette (`Ctrl+Shift+P`) and select `Preferences: Open User Settings (JSON)`. Add these settings: `"chat.mcp.autostart": "never"` and `"chat.disableAIFeatures": false`. 
 
 Your `Settings.json` file should look something like this:  
 
@@ -74,14 +74,17 @@ Your `Settings.json` file should look something like this:
     "packages.warnMissingInEditor": false,
     "ai.mcp.enabled": true,
     "packages.confirmMissingOnRun": false,
-    "chat.disableAIFeatures": false, 
-    "chat.mcp.autostart": "never"
+    "chat.disableAIFeatures": false, ### important
+    "chat.mcp.autostart": "never" ### important
 }
 ```
 
 - 2.3 Login to your Github Account: In your Positron session, go to `Accounts` (bottom left) -> `Configure LLM providers` -> `Github Copilot` and follow the steps to login to your account. 
 
 - 2.4 Restart your Positron session for the changes to apply.
+
+ - 2.5 On your sidebar on the lieft, there should be a "Chat" window. Please open it and try to communicate with the model. 
+
 
 # 3. A few words on model selection and token usage: 
 
@@ -94,7 +97,7 @@ Your `Settings.json` file should look something like this:
 
 - The AI market is quite dynamic. Currently, the most popular LLM providers used for coding are OpenAI (ChatGPT Codex), Anthropic (Claude Code) as well as as well as Google (Gemini). A list of the currently leading models and providers can be found here: https://artificialanalysis.ai/leaderboards/models. Notice that the leading models have substantially higher costs per task compared to mid-tier models? 
 
-As an example, ChatGPT currently offers the following models for coding tasks (https://learn.chatgpt.com/docs/models?surface=app): Astra > Sol > Terra > Luna. For everyday tasks, I use Terra, for complex interpretations of data I use Sol. 
+As an example, ChatGPT currently offers the following models for coding tasks (https://learn.chatgpt.com/docs/models?surface=app): Astra > Sol > Terra > Luna. 
 
 
 
@@ -123,7 +126,8 @@ https://github.com/thorohde/CompFunGene_session_3/blob/main/AGENTS.md.
 
 ## General
 
-- If my instructions are conflicting, unclear or require further decisions or specification, briefly describe the options with their advantages and disadvantages.
+- If my instructions are conflicting, unclear or require further decisions or specification, 
+briefly describe the options with their advantages and disadvantages.
 
 ## Coding conventions
 
@@ -160,23 +164,23 @@ This `AGENTS.md` file should be placed in the root of your project directory. It
 
 AGENTS instructions should be **precise**, **short** and **non-contradicting**. Start small and add instructions when you observe recurring problems. Instructions do not guarantee compliance. Also feel free to ask the AI to generate an AGENTS file for you.
  
-# Coding task
+# 6. Coding task
 
 With the AI agent set up, we are ready to start coding. Please open the last weeks file `2_compPertOmics.Rmd` and try to solve task Q2.11 using your coding agent. Try to solve the task in small steps, and ask for help when you get stuck. Also try to apply the prompting strategies described above. Feel free to go back to previous tasks of the exercises and explore using AI to solve them. 
 
-# Optional: Generate a Shiny app to create an interactive volcano plot. 
+## 6.1 Optional: Generate a Shiny app to create an interactive volcano plot. 
 
 Now, we want to use our AI agent to build an interactive visualization of the data from scratch. 
 
 1. At the end of your `2_compPertOmics.Rmd` file, execute the code `saveRDS(geneStats, "geneStats.rds")` to save the previously computed gene statistics data. This generated object will be used by the newly generated Shiny app. 
 2. Open the `shiny_app.qmd` file. 
-3. Tell the AI agent to build an R shiny app which visualizes the data from the newly generated geneStats.rds in a volcano plot. You may use the instructions below, feel free to experiment and play around. You might also try and create full scientific reports based on the data. 
+3. Prompt the AI agent to build an R shiny app which visualizes the data from the newly generated geneStats.rds in a volcano plot. You may use the instructions below, feel free to experiment and play around. You might also try and create full scientific reports based on the data. 
 
 ```
 Build an R shiny app which visualizes the data from geneStats.rds in a volcano plot. Offer the option to filter the data based on p-value and log fold change thresholds. The app should allow users to adjust these thresholds using sliders and display the resulting volcano plot interactively. Place the sliders below the plot. 
 ```
 
-# Takeaways: If AI can write all the code we need, what is left to learn?
+# 7 Takeaways: If AI can write all the code we need, what is left to learn?
 
 Being able to code is not the skill it was five years ago. **Problem formulation, code comprehension, debugging, and validation remain essential.**
 
